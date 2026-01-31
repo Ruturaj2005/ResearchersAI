@@ -2,7 +2,7 @@ import os
 import tempfile
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings  
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings  # <-- NEW LIBRARY
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -12,18 +12,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-api_key = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-
-embeddings = HuggingFaceInferenceAPIEmbeddings(
-    api_key=api_key, 
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+# --- THE FIX: USE FASTEMBED (Local, Fast, Low RAM) ---
+# This downloads a tiny model (~200MB) once and runs it on CPU.
+# No API keys needed for embeddings. No Timeouts.
+embeddings = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
 
 def create_vector_db_from_upload(file_content: bytes):
-    """
-    Standard ingestion: File -> Text -> Chunks -> Vector Store
-    """
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
         temp_file.write(file_content)
         temp_file_path = temp_file.name
@@ -35,7 +29,7 @@ def create_vector_db_from_upload(file_content: bytes):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = text_splitter.split_documents(docs)
 
-        # Create Vector Store using the API-based embeddings
+        # Create Vector Store
         vector_store = FAISS.from_documents(chunks, embeddings)
         return vector_store
 
@@ -48,6 +42,8 @@ def format_docs(docs):
 
 def get_rag_chain(vector_store):
     llm = get_llm()
+    
+    # K=4 is good balance for speed/context
     retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 
     template = """You are an academic research assistant. 
