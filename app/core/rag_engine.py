@@ -1,19 +1,29 @@
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from typing import List
+import os
 import tempfile
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings  
 from langchain_community.vectorstores import FAISS
-from app.core.llm_engine import get_llm
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-import os
+from app.core.llm_engine import get_llm
+from dotenv import load_dotenv
 
-embeddings= HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+load_dotenv()
 
-def create_vector_db(file_content:bytes):
+
+api_key = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
+embeddings = HuggingFaceInferenceAPIEmbeddings(
+    api_key=api_key, 
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+def create_vector_db_from_upload(file_content: bytes):
+    """
+    Standard ingestion: File -> Text -> Chunks -> Vector Store
+    """
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
         temp_file.write(file_content)
         temp_file_path = temp_file.name
@@ -25,6 +35,7 @@ def create_vector_db(file_content:bytes):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = text_splitter.split_documents(docs)
 
+        # Create Vector Store using the API-based embeddings
         vector_store = FAISS.from_documents(chunks, embeddings)
         return vector_store
 
@@ -32,11 +43,7 @@ def create_vector_db(file_content:bytes):
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
-
 def format_docs(docs):
-    """
-    Helper to combine retrieved documents into a single string.
-    """
     return "\n\n".join(doc.page_content for doc in docs)
 
 def get_rag_chain(vector_store):
@@ -54,8 +61,8 @@ def get_rag_chain(vector_store):
     {question}
 
     Answer:"""
-
-    prompt= ChatPromptTemplate.from_template(template)
+    
+    prompt = ChatPromptTemplate.from_template(template)
 
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}

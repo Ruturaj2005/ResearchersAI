@@ -6,8 +6,5 @@ langchain
 langchain-huggingface
 langchain-community
 faiss-cpu
-sentence-transformers
 python-dotenv
 tiktoken
-streamlit
-requests
