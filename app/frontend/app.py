@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import os
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -312,7 +313,8 @@ if uploaded_file is not None and process_btn:
             
             # 3. Call the FastAPI Backend
             # Ensure your backend is running on port 8000
-            response = requests.post("http://localhost:8000/api/v1/analyze/pdf", files=files)
+            API_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+            response = requests.post(f"{API_URL}/api/v1/analyze/pdf", files=files)
             
             if response.status_code == 200:
                 data = response.json()
